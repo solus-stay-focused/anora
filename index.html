@@ -910,10 +910,38 @@ const firebaseConfig = {
   appId: "1:451542461807:web:e47ea8f034809198ec8c9a",
   measurementId: "G-MNCK5TK2TS"
 };
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-const storage = firebase.storage();
+let auth, db, storage;
+let FIREBASE_OK = true;
+try{
+  if(typeof firebase === 'undefined') throw new Error('Firebase SDK did not load (blocked by network/ad-blocker?)');
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+  storage = firebase.storage();
+}catch(err){
+  // If Firebase can't load (blocked script, offline, bad network, ad
+  // blocker, etc.) we fall back to harmless no-op stubs instead of
+  // letting this throw kill the single inline <script> tag below it —
+  // that used to mean EVERY feature on the page (nav, search, watchlist,
+  // playback) silently stopped working the moment Firebase failed.
+  console.error('Firebase failed to initialize — continuing in offline mode:', err);
+  FIREBASE_OK = false;
+  const rejected = ()=> Promise.reject(new Error('Offline: Firebase unavailable'));
+  auth = {
+    currentUser: null,
+    onAuthStateChanged(cb){ cb(null); return ()=>{}; },
+    signInWithPopup: rejected, signInWithEmailAndPassword: rejected,
+    createUserWithEmailAndPassword: rejected, signOut: ()=> Promise.resolve()
+  };
+  const emptySnap = { forEach(){}, exists:false, data(){ return null; } };
+  db = {
+    collection(){ return {
+      where(){ return { get: ()=> Promise.resolve(emptySnap) }; },
+      doc(){ return { get: ()=> Promise.resolve(emptySnap), delete: rejected, set: rejected }; }
+    }; }
+  };
+  storage = { ref(){ return { delete: rejected, put: rejected }; } };
+}
 const MAX_AUDIO_MB = 50;
 
 // Flip to true once Firebase Storage is enabled (Blaze plan set up in the
@@ -1033,7 +1061,8 @@ document.querySelector('[data-open-search]')?.addEventListener('click', ()=> doc
 
 // ---------- Auth ----------
 let authMode = "signin"; // "signin" | "signup"
-const googleProvider = new firebase.auth.GoogleAuthProvider();
+let googleProvider = null;
+try{ if(FIREBASE_OK) googleProvider = new firebase.auth.GoogleAuthProvider(); }catch(err){ console.error('Google auth provider unavailable:', err); }
 
 function setAuthMode(mode){
   authMode = mode;
