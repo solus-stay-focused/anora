@@ -323,22 +323,6 @@
   .track-grid .feat-card{ flex:none; }
   .track-grid .feat-art{ width:100%; height:auto; aspect-ratio:1/1; }
 
-  /* ---------------- Recently played list ---------------- */
-  .recent-scroll{ display:flex; gap:14px; overflow-x:auto; scrollbar-width:none; }
-  .recent-scroll::-webkit-scrollbar{ display:none; }
-  .recent-item{
-    flex:0 0 260px; display:flex; align-items:center; gap:12px;
-    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-sm);
-    padding:10px; cursor:pointer;
-  }
-  .recent-item:hover{ border-color:rgba(124,58,237,0.4); }
-  .recent-item img{ width:42px; height:42px; border-radius:6px; object-fit:cover; flex-shrink:0; }
-  .recent-item .r-text{ overflow:hidden; flex:1; }
-  .recent-item .r-title{ font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .recent-item .r-sub{ font-size:11px; color:var(--muted); margin-top:2px; }
-  .recent-item .r-play{ width:26px; height:26px; border-radius:50%; background:rgba(124,58,237,0.18); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .recent-item .r-play svg{ width:11px; height:11px; }
-
   .empty-note{ color:var(--muted); font-size:12.5px; font-style:italic; padding:14px 0; }
 
   /* ---------------- Right panel: Now Playing ---------------- */
@@ -556,6 +540,7 @@
       <div class="nav-divider"></div>
 
       <div class="nav-item" id="nav-collection"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.8 8.6c0 5.4-8.8 10.4-8.8 10.4S3.2 14 3.2 8.6a4.6 4.6 0 018.8-1.9 4.6 4.6 0 018.8 1.9z"/></svg><span>My Collection</span></div>
+      <div class="nav-item" id="nav-history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><span>History</span></div>
     </nav>
    </div>
 
@@ -628,14 +613,6 @@
           <div class="cat-grid" id="category-grid"></div>
         </section>
 
-        <!-- RECENTLY PLAYED -->
-        <section class="section" id="recent">
-          <div class="section-head"><h2>Recently played</h2></div>
-          <div class="recent-scroll" id="recent-scroll">
-            <div class="empty-note">Nothing played yet — pick a track to get started.</div>
-          </div>
-        </section>
-
         <!-- FULL CATEGORY ROWS -->
         <div id="category-rows"></div>
 
@@ -671,6 +648,23 @@
           </div>
         </div>
         <div class="track-grid" id="watchlist-page-grid"></div>
+      </div>
+
+      <!-- ============ HISTORY PAGE ============ -->
+      <div id="history-view" style="display:none;">
+        <div class="category-page-head">
+          <div class="cat-back-btn" id="history-back-btn" title="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </div>
+          <div class="category-page-icon c5">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+          </div>
+          <div class="category-page-title">
+            <h1>History</h1>
+            <p id="history-page-count">0 tracks</p>
+          </div>
+        </div>
+        <div class="track-grid" id="history-page-grid"></div>
       </div>
 
     </main>
@@ -1019,6 +1013,7 @@ document.querySelectorAll('[data-scroll]').forEach(el=>{
   el.addEventListener('click', ()=>{
     closeCategoryPage();
     closeWatchlistPage();
+    closeHistoryPage();
     setActiveNav(el);
     const id = el.dataset.scroll;
     if(id === 'top'){
@@ -1030,10 +1025,11 @@ document.querySelectorAll('[data-scroll]').forEach(el=>{
   });
 });
 document.querySelectorAll('[data-cat]').forEach(el=>{
-  el.addEventListener('click', ()=>{ closeWatchlistPage(); openCategoryPage(el.dataset.cat); });
+  el.addEventListener('click', ()=>{ closeWatchlistPage(); closeHistoryPage(); openCategoryPage(el.dataset.cat); });
 });
 document.getElementById('nav-watchlist').addEventListener('click', ()=> openWatchlistPage('nav-watchlist'));
 document.getElementById('nav-collection').addEventListener('click', ()=> openWatchlistPage('nav-collection'));
+document.getElementById('nav-history').addEventListener('click', ()=> openHistoryPage());
 document.querySelector('[data-open-search]')?.addEventListener('click', ()=> document.getElementById('search-input').focus());
 
 // ---------- Auth ----------
@@ -1468,6 +1464,7 @@ function openCategoryPage(key){
   const cat = CATEGORIES.find(c => c.key === key);
   if(!cat) return;
   closeWatchlistPage();
+  closeHistoryPage();
   openCategoryKey = key;
   document.getElementById('category-page-name').textContent = cat.label;
   document.getElementById('category-page-icon').className = 'category-page-icon ' + cat.tile;
@@ -1511,6 +1508,7 @@ function renderWatchlistPageGrid(){
 
 function openWatchlistPage(sourceNavId){
   closeCategoryPage();
+  closeHistoryPage();
   watchlistOpen = true;
   renderWatchlistPageGrid();
   document.getElementById('home-view').style.display = 'none';
@@ -1533,20 +1531,66 @@ document.getElementById('watchlist-back-btn').addEventListener('click', ()=>{
   setActiveNav(document.getElementById('nav-home'));
 });
 
+// ---------- History page ----------
+let historyOpen = false;
+
+function renderHistoryPageGrid(){
+  const countEl = document.getElementById('history-page-count');
+  const grid = document.getElementById('history-page-grid');
+  if(!countEl || !grid) return;
+  const tracks = recentlyPlayed.map(id => allTracks.find(t=>t.id===id)).filter(Boolean);
+  countEl.textContent = tracks.length === 1 ? '1 track' : `${tracks.length} tracks`;
+  grid.innerHTML = tracks.length
+    ? tracks.map(trackCardHTML).join('')
+    : `<div class="empty-note">Nothing played yet — pick a track to get started.</div>`;
+  grid.querySelectorAll('[data-track]').forEach(el=>{
+    el.addEventListener('click', ()=> playFromQueue(tracks, el.dataset.track));
+  });
+}
+
+function openHistoryPage(){
+  closeCategoryPage();
+  closeWatchlistPage();
+  historyOpen = true;
+  renderHistoryPageGrid();
+  document.getElementById('home-view').style.display = 'none';
+  document.getElementById('history-view').style.display = 'block';
+  window.scrollTo({ top:0, left:0, behavior:'auto' });
+  setActiveNav(document.getElementById('nav-history'));
+  if(location.hash !== '#history') location.hash = 'history';
+}
+
+function closeHistoryPage(){
+  if(!historyOpen) return;
+  historyOpen = false;
+  document.getElementById('history-view').style.display = 'none';
+  document.getElementById('home-view').style.display = 'block';
+  if(location.hash) history.pushState('', document.title, location.pathname + location.search);
+}
+
+document.getElementById('history-back-btn').addEventListener('click', ()=>{
+  closeHistoryPage();
+  setActiveNav(document.getElementById('nav-home'));
+});
+
 // Keep the open page in sync with the URL: refreshing, using the
-// browser's back/forward buttons, or sharing a link with #cat-nasheed
-// or #watchlist in it all land on the same page instead of always
-// resetting to Home.
+// browser's back/forward buttons, or sharing a link with #cat-nasheed,
+// #watchlist, or #history in it all land on the same page instead of
+// always resetting to Home.
 window.addEventListener('hashchange', ()=>{
   const m = location.hash.match(/^#cat-(.+)$/);
   if(m && CATEGORIES.some(c => c.key === m[1])){
     closeWatchlistPage();
+    closeHistoryPage();
     if(openCategoryKey !== m[1]) openCategoryPage(m[1]);
   } else if(location.hash === '#watchlist'){
     if(!watchlistOpen) openWatchlistPage();
+  } else if(location.hash === '#history'){
+    if(!historyOpen) openHistoryPage();
   } else {
     closeCategoryPage();
     closeWatchlistPage();
+    closeHistoryPage();
     setActiveNav(document.getElementById('nav-home'));
   }
 });
@@ -1555,6 +1599,7 @@ function restoreViewFromHash(){
   const m = location.hash.match(/^#cat-(.+)$/);
   if(m && CATEGORIES.some(c => c.key === m[1])) openCategoryPage(m[1]);
   else if(location.hash === '#watchlist') openWatchlistPage();
+  else if(location.hash === '#history') openHistoryPage();
 }
 
 function canManageTrack(t){
@@ -1765,26 +1810,6 @@ function renderCategoryRows(){
   });
 }
 
-function renderRecent(){
-  const scroll = document.getElementById('recent-scroll');
-  if(recentlyPlayed.length === 0){
-    scroll.innerHTML = `<div class="empty-note">Nothing played yet — pick a track to get started.</div>`;
-    return;
-  }
-  const items = recentlyPlayed.map(id => allTracks.find(t=>t.id===id)).filter(Boolean);
-  scroll.innerHTML = items.map(t => `
-    <div class="recent-item" data-track="${t.id}">
-      <img src="${t.thumb || PLACEHOLDER_ART}" alt="">
-      <div class="r-text"><div class="r-title">${t.title}</div><div class="r-sub">${t.channel || ''}</div></div>
-      <div class="r-play"><svg viewBox="0 0 24 24" fill="#F4F3F8"><path d="M8 5v14l11-7z"/></svg></div>
-    </div>
-  `).join('');
-  scroll.querySelectorAll('[data-track]').forEach(el=>{
-    el.addEventListener('click', ()=> playFromQueue(items, el.dataset.track));
-  });
-  enableDragScroll(scroll);
-}
-
 function renderSuggested(){
   const list = document.getElementById('suggested-list');
   const current = currentQueue[currentIndex];
@@ -1845,10 +1870,10 @@ async function loadTracks(){
   }
   renderFeatured();
   renderCategoryRows();
-  renderRecent();
   renderCategoryPageGrid();
   renderSuggested();
   if(watchlistOpen) renderWatchlistPageGrid();
+  if(historyOpen) renderHistoryPageGrid();
 }
 
 // ---------- YouTube IFrame Player ----------
@@ -1906,7 +1931,7 @@ function playFromQueue(list, trackId){
 function pushRecent(id){
   recentlyPlayed = [id, ...recentlyPlayed.filter(x=>x!==id)].slice(0, 10);
   localStorage.setItem('anora_recent', JSON.stringify(recentlyPlayed));
-  renderRecent();
+  if(historyOpen) renderHistoryPageGrid();
 }
 
 function updateLikeUI(){
