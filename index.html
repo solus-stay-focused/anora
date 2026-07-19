@@ -1498,15 +1498,35 @@ function renderSuggested(){
 
 // ---------- Load from Firestore ----------
 async function loadTracks(){
-  const snap = await db.collection('tracks').where('approved','==', true).orderBy('createdAt','desc').get();
-  allTracks = [];
-  tracksByCategory = {};
-  CATEGORIES.forEach(c => tracksByCategory[c.key] = []);
-  snap.forEach(doc=>{
-    const t = { id: doc.id, ...doc.data() };
-    allTracks.push(t);
-    if(tracksByCategory[t.category]) tracksByCategory[t.category].push(t);
-  });
+  try{
+    // NOTE: we deliberately do NOT chain .orderBy('createdAt') onto this
+    // .where() query. Combining where()+orderBy() on different fields
+    // requires a composite index to be created in the Firebase console
+    // first — until that index exists, this call throws a
+    // "failed-precondition" error and the whole load silently fails,
+    // which is the single most common reason a freshly uploaded track
+    // "doesn't show up". Sorting client-side below sidesteps that.
+    const snap = await db.collection('tracks').where('approved','==', true).get();
+    allTracks = [];
+    tracksByCategory = {};
+    CATEGORIES.forEach(c => tracksByCategory[c.key] = []);
+    snap.forEach(doc=>{
+      const t = { id: doc.id, ...doc.data() };
+      allTracks.push(t);
+      if(tracksByCategory[t.category]) tracksByCategory[t.category].push(t);
+    });
+    // Sort newest first. A track saved moments ago may still have a
+    // null createdAt locally (serverTimestamp hasn't round-tripped yet),
+    // so treat missing timestamps as "now" rather than sorting them last.
+    const sortKey = t => t.createdAt && t.createdAt.toMillis ? t.createdAt.toMillis() : Date.now();
+    allTracks.sort((a,b)=> sortKey(b) - sortKey(a));
+    Object.keys(tracksByCategory).forEach(k=> tracksByCategory[k].sort((a,b)=> sortKey(b) - sortKey(a)));
+  }catch(err){
+    console.error('loadTracks failed:', err);
+    const scroll = document.getElementById('featured-scroll');
+    if(scroll) scroll.innerHTML = `<div class="empty-note">Couldn't load tracks (${err.message}). Check the browser console and your Firestore rules/index.</div>`;
+    return;
+  }
   renderFeatured();
   renderCategoryRows();
   renderRecent();
