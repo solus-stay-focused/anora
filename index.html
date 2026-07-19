@@ -337,6 +337,10 @@
   .np-panel-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
   .np-panel-head h3{ font-size:14px; font-weight:700; }
   .np-panel-head svg{ width:16px; height:16px; color:var(--muted); cursor:pointer; }
+  .np-panel-head-actions{ display:flex; align-items:center; gap:14px; }
+  .np-panel-head-actions .like-btn{ padding:0; }
+  .np-panel-head-actions .like-btn svg{ width:18px; height:18px; color:var(--muted); }
+  .np-panel-head-actions .like-btn.liked svg{ color:var(--pink); }
 
   .np-art-big{
     width:100%; aspect-ratio:1; border-radius:var(--radius); overflow:hidden;
@@ -680,7 +684,10 @@
   <aside class="np-panel">
     <div class="np-panel-head">
       <h3>Now Playing</h3>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
+      <div class="np-panel-head-actions">
+        <button class="like-btn" id="like-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6c0 5.4-8.8 10.4-8.8 10.4S3.2 14 3.2 8.6a4.6 4.6 0 018.8-1.9 4.6 4.6 0 018.8 1.9z"/></svg></button>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
+      </div>
     </div>
 
     <div class="np-art-big"><img id="np-art-big-img" src="audio1.png" alt=""></div>
@@ -690,7 +697,6 @@
         <div class="np-title-big" id="np-title-big">Nothing playing</div>
         <div class="np-sub-big" id="np-sub-big">Pick a track to begin</div>
       </div>
-      <button class="like-btn" id="like-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 8.6c0 5.4-8.8 10.4-8.8 10.4S3.2 14 3.2 8.6a4.6 4.6 0 018.8-1.9 4.6 4.6 0 018.8 1.9z"/></svg></button>
     </div>
 
     <div class="np-progress">
@@ -1049,6 +1055,10 @@ document.querySelectorAll('[data-scroll]').forEach(el=>{
     closeWatchlistPage();
     setActiveNav(el);
     const id = el.dataset.scroll;
+    if(id === 'top'){
+      window.scrollTo({ top:0, left:0, behavior:'smooth' });
+      return;
+    }
     const target = document.getElementById(id);
     if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
   });
@@ -1500,7 +1510,7 @@ function openCategoryPage(key){
   renderCategoryPageGrid();
   document.getElementById('home-view').style.display = 'none';
   document.getElementById('category-view').style.display = 'block';
-  document.getElementById('top').scrollIntoView({ behavior:'auto', block:'start' });
+  window.scrollTo({ top:0, left:0, behavior:'auto' });
   if(location.hash !== '#cat-' + key) location.hash = 'cat-' + key;
 }
 
@@ -1539,7 +1549,7 @@ function openWatchlistPage(sourceNavId){
   renderWatchlistPageGrid();
   document.getElementById('home-view').style.display = 'none';
   document.getElementById('watchlist-view').style.display = 'block';
-  document.getElementById('top').scrollIntoView({ behavior:'auto', block:'start' });
+  window.scrollTo({ top:0, left:0, behavior:'auto' });
   setActiveNav(document.getElementById(sourceNavId || 'nav-watchlist'));
   if(location.hash !== '#watchlist') location.hash = 'watchlist';
 }
