@@ -44,12 +44,19 @@
   .sidebar{
     background:var(--panel);
     border-right:1px solid var(--line);
-    padding:26px 18px;
-    display:flex;
-    flex-direction:column;
     position:sticky;
     top:0;
     height:100vh;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+  }
+  .sidebar::-webkit-scrollbar{ display:none; }
+  .sidebar-inner{
+    padding:26px 18px;
+    display:flex;
+    flex-direction:column;
+    min-height:100%;
   }
   .brand{ display:flex; align-items:center; gap:11px; padding:0 8px 26px; }
   .brand-mark{
@@ -538,6 +545,7 @@
 
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar">
+   <div class="sidebar-inner">
     <div class="brand">
       <div class="brand-mark">
         <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L4 8v8l8 6 8-6V8l-8-6z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="#fff"/></svg>
@@ -582,6 +590,7 @@
       <button id="account-edit-btn">Edit profile</button>
       <button id="account-signout-btn" class="danger">Sign out</button>
     </div>
+   </div>
   </aside>
 
   <!-- ============ MAIN COLUMN ============ -->
@@ -1748,6 +1757,23 @@ function enableDragScroll(el){
   el.addEventListener('click', (e)=>{
     if(dragged){ e.preventDefault(); e.stopPropagation(); dragged = false; }
   }, true);
+
+  // Mouse-wheel support: while hovering this row, turn vertical wheel
+  // movement into horizontal scrolling of THIS row only. We only
+  // preventDefault (stopping the page from scrolling) while the row
+  // still has room to move in that direction — once you hit either
+  // end, the wheel event falls through and the page scrolls normally.
+  el.addEventListener('wheel', (e)=>{
+    const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if(delta === 0) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if(maxScroll <= 0) return; // nothing to scroll horizontally, let page scroll
+    const atStart = el.scrollLeft <= 0;
+    const atEnd = el.scrollLeft >= maxScroll - 1;
+    if((delta < 0 && atStart) || (delta > 0 && atEnd)) return; // let it bubble at the edges
+    e.preventDefault();
+    el.scrollLeft += delta;
+  }, { passive:false });
 }
 
 function renderFeatured(){
