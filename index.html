@@ -648,12 +648,6 @@
           <div class="card-scroll" id="featured-scroll"></div>
         </section>
 
-        <!-- LIVE YOUTUBE SEARCH RESULTS -->
-        <section class="section" id="youtube-results-section" style="display:none;">
-          <div class="section-head"><h2>From YouTube</h2></div>
-          <div class="card-scroll" id="youtube-results-scroll"></div>
-        </section>
-
         <!-- CATEGORIES -->
         <section class="section" id="categories">
           <div class="section-head"><h2>Browse by category</h2></div>
@@ -1038,16 +1032,6 @@ const CATEGORIES = [
 
 const PLACEHOLDER_ART = "https://placehold.co/400x400/1A1828/9490A8?text=Anora";
 
-// YouTube Data API v3 key — needed ONLY for the public "search all of
-// YouTube" feature. Get one free at console.cloud.google.com:
-// 1. Create/select a project → enable "YouTube Data API v3"
-// 2. Credentials → Create Credentials → API key
-// 3. Restrict the key to "YouTube Data API v3" + your site's HTTP referrer
-// Free quota: 10,000 units/day, each search costs 100 units (~100
-// searches/day free). Without a key, local library search still works
-// fine — only the "From YouTube" live results are disabled.
-const YOUTUBE_API_KEY = "YOUR_YOUTUBE_API_KEY";
-
 let isAdmin = false;
 let allTracks = [];
 let tracksByCategory = {};
@@ -1057,19 +1041,6 @@ let shuffleOn = false;
 let repeatOn = false;
 let likedIds = new Set(JSON.parse(localStorage.getItem('anora_liked') || '[]'));
 let recentlyPlayed = JSON.parse(localStorage.getItem('anora_recent') || '[]');
-// Every track object ever rendered (curated + live YouTube search hits)
-// gets cached here by id, and persisted to localStorage. This lets
-// Watchlist/History/Playlists resolve a track even if it came from a
-// one-off YouTube search rather than the curated library, and even
-// after a page reload.
-let trackCache = JSON.parse(localStorage.getItem('anora_track_cache') || '{}');
-function registerTracks(tracks){
-  tracks.forEach(t => { trackCache[t.id] = t; });
-  localStorage.setItem('anora_track_cache', JSON.stringify(trackCache));
-}
-function resolveTrack(id){
-  return trackCache[id] || allTracks.find(t => t.id === id) || null;
-}
 let ytPlayer = null, ytReady = false, seekPoll = null;
 let pendingPreview = null;
 
@@ -1143,6 +1114,8 @@ document.querySelectorAll('[data-scroll]').forEach(el=>{
     closeCategoryPage();
     closeWatchlistPage();
     closeHistoryPage();
+    closePlaylistsPage();
+    closePlaylistDetail();
     setActiveNav(el);
     const id = el.dataset.scroll;
     if(id === 'top'){
@@ -1154,12 +1127,19 @@ document.querySelectorAll('[data-scroll]').forEach(el=>{
   });
 });
 document.querySelectorAll('[data-cat]').forEach(el=>{
-  el.addEventListener('click', ()=>{ closeWatchlistPage(); closeHistoryPage(); openCategoryPage(el.dataset.cat); });
+  el.addEventListener('click', ()=>{ closeWatchlistPage(); closeHistoryPage(); closePlaylistsPage(); closePlaylistDetail(); openCategoryPage(el.dataset.cat); });
 });
 document.getElementById('nav-watchlist').addEventListener('click', ()=> openWatchlistPage('nav-watchlist'));
 document.getElementById('nav-collection').addEventListener('click', ()=> openWatchlistPage('nav-collection'));
 document.getElementById('nav-history').addEventListener('click', ()=> openHistoryPage());
-document.querySelector('[data-open-search]')?.addEventListener('click', ()=> document.getElementById('search-input').focus());
+document.querySelector('[data-open-search]')?.addEventListener('click', ()=>{
+  closeCategoryPage();
+  closeWatchlistPage();
+  closeHistoryPage();
+  closePlaylistsPage();
+  closePlaylistDetail();
+  document.getElementById('search-input').focus();
+});
 
 // ---------- Auth ----------
 let authMode = "signin"; // "signin" | "signup"
@@ -1625,7 +1605,7 @@ document.getElementById('category-back-btn').addEventListener('click', ()=>{
 let watchlistOpen = false;
 
 function renderWatchlistPageGrid(){
-  const tracks = [...likedIds].map(resolveTrack).filter(Boolean);
+  const tracks = allTracks.filter(t => likedIds.has(t.id));
   document.getElementById('watchlist-page-count').textContent =
     tracks.length === 1 ? '1 track' : `${tracks.length} tracks`;
   const grid = document.getElementById('watchlist-page-grid');
@@ -1671,7 +1651,7 @@ function renderHistoryPageGrid(){
   const countEl = document.getElementById('history-page-count');
   const grid = document.getElementById('history-page-grid');
   if(!countEl || !grid) return;
-  const tracks = recentlyPlayed.map(resolveTrack).filter(Boolean);
+  const tracks = recentlyPlayed.map(id => allTracks.find(t=>t.id===id)).filter(Boolean);
   countEl.textContent = tracks.length === 1 ? '1 track' : `${tracks.length} tracks`;
   grid.innerHTML = tracks.length
     ? tracks.map(trackCardHTML).join('')
@@ -1770,7 +1750,7 @@ function renderPlaylistDetailGrid(){
   document.getElementById('playlist-detail-name').textContent = p.name;
   document.getElementById('playlist-detail-count').textContent =
     p.trackIds.length === 1 ? '1 track' : `${p.trackIds.length} tracks`;
-  const tracks = p.trackIds.map(resolveTrack).filter(Boolean);
+  const tracks = p.trackIds.map(id => allTracks.find(t=>t.id===id)).filter(Boolean);
   const grid = document.getElementById('playlist-detail-grid');
   grid.innerHTML = tracks.length ? tracks.map(trackCardHTML).join('') :
     `<div class="empty-note">This playlist is empty — use the + icon on any track to add it here.</div>`;
@@ -2203,7 +2183,6 @@ async function loadTracks(){
     const sortKey = t => t.createdAt && t.createdAt.toMillis ? t.createdAt.toMillis() : Date.now();
     allTracks.sort((a,b)=> sortKey(b) - sortKey(a));
     Object.keys(tracksByCategory).forEach(k=> tracksByCategory[k].sort((a,b)=> sortKey(b) - sortKey(a)));
-    registerTracks(allTracks);
   }catch(err){
     console.error('loadTracks failed:', err);
     const scroll = document.getElementById('featured-scroll');
@@ -2396,101 +2375,23 @@ document.addEventListener('click', (e)=>{
 });
 
 // ---------- Search ----------
-function decodeHtmlEntities(str){
-  const el = document.createElement('textarea');
-  el.innerHTML = str;
-  return el.value;
-}
-
-async function searchYouTubeLive(query){
-  if(!YOUTUBE_API_KEY || YOUTUBE_API_KEY === "YOUR_YOUTUBE_API_KEY") return null; // not configured
-  try{
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=16&q=${encodeURIComponent(query)}&key=${YOUTUBE_API_KEY}`;
-    const res = await fetch(url);
-    if(!res.ok){
-      const errBody = await res.json().catch(()=>null);
-      throw new Error(errBody?.error?.message || `YouTube search failed (${res.status})`);
-    }
-    const data = await res.json();
-    return (data.items || [])
-      .filter(item => item.id && item.id.videoId)
-      .map(item => ({
-        id: 'yt_' + item.id.videoId,
-        videoId: item.id.videoId,
-        title: decodeHtmlEntities(item.snippet.title),
-        channel: decodeHtmlEntities(item.snippet.channelTitle || ''),
-        thumb: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || PLACEHOLDER_ART,
-        category: null,
-        approved: true
-      }));
-  }catch(err){
-    console.error('YouTube search error:', err);
-    throw err;
-  }
-}
-
-function wireTrackCardClicks(container, list){
-  container.querySelectorAll('[data-track]').forEach(el=>{
-    el.addEventListener('click', ()=> playFromQueue(list, el.dataset.track));
-  });
-}
-
-let youtubeSearchDebounce = null;
-let youtubeSearchToken = 0;
-
-async function runYoutubeLiveSearch(query){
-  const myToken = ++youtubeSearchToken; // guards against a slower older
-                                         // request overwriting a newer one
-  const section = document.getElementById('youtube-results-section');
-  const scroll = document.getElementById('youtube-results-scroll');
-  section.style.display = 'block';
-  scroll.innerHTML = `<div class="empty-note">Searching YouTube…</div>`;
-  try{
-    const results = await searchYouTubeLive(query);
-    if(myToken !== youtubeSearchToken) return; // a newer search superseded this one
-    if(results === null){
-      scroll.innerHTML = `<div class="empty-note">Live YouTube search isn't set up yet — add a YouTube Data API key in the code to enable this. Your library search above still works.</div>`;
-      return;
-    }
-    if(results.length === 0){
-      scroll.innerHTML = `<div class="empty-note">No YouTube results for "${query}".</div>`;
-      return;
-    }
-    registerTracks(results);
-    scroll.innerHTML = results.map(trackCardHTML).join('');
-    wireTrackCardClicks(scroll, results);
-  }catch(err){
-    if(myToken !== youtubeSearchToken) return;
-    scroll.innerHTML = `<div class="empty-note">YouTube search failed: ${err.message}</div>`;
-  }
-}
-
-function hideYoutubeResults(){
-  youtubeSearchToken++; // invalidate any in-flight search
-  const section = document.getElementById('youtube-results-section');
-  if(section) section.style.display = 'none';
-}
-
 document.getElementById('search-input').addEventListener('input', (e)=>{
-  const raw = e.target.value.trim();
-  const q = raw.toLowerCase();
-  clearTimeout(youtubeSearchDebounce);
-
-  if(!q){
-    renderFeatured();
-    hideYoutubeResults();
-    return;
-  }
-
+  const q = e.target.value.trim().toLowerCase();
+  if(!q){ renderFeatured(); return; }
+  closeCategoryPage();
+  closeWatchlistPage();
+  closeHistoryPage();
+  closePlaylistsPage();
+  closePlaylistDetail();
   const matches = allTracks.filter(t =>
     t.title.toLowerCase().includes(q) || (t.channel || '').toLowerCase().includes(q)
   );
   const scroll = document.getElementById('featured-scroll');
-  scroll.innerHTML = matches.length ? matches.map(trackCardHTML).join('') : `<div class="empty-note">No matches in your library for "${raw}".</div>`;
-  wireTrackCardClicks(scroll, matches);
+  scroll.innerHTML = matches.length ? matches.map(trackCardHTML).join('') : `<div class="empty-note">No matches for "${q}".</div>`;
+  scroll.querySelectorAll('[data-track]').forEach(el=>{
+    el.addEventListener('click', ()=> playFromQueue(matches, el.dataset.track));
+  });
   document.getElementById('featured').scrollIntoView({ behavior:'smooth' });
-
-  youtubeSearchDebounce = setTimeout(()=> runYoutubeLiveSearch(raw), 450);
 });
 
 // ---------- Init ----------
