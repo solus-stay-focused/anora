@@ -236,6 +236,17 @@
   .feat-card:hover .track-delete-btn{ opacity:1; }
   .track-delete-btn:hover{ background:rgba(220,38,38,0.9); }
 
+  .track-watchlist-btn{
+    position:absolute; top:8px; left:8px; width:28px; height:28px; border-radius:50%;
+    background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .18s ease, background .15s ease;
+  }
+  .track-watchlist-btn svg{ width:14px; height:14px; }
+  .feat-card:hover .track-watchlist-btn{ opacity:1; }
+  .track-watchlist-btn.on{ opacity:1; background:rgba(124,58,237,0.9); }
+  .track-watchlist-btn:hover{ background:rgba(168,85,247,0.9); }
+
   /* ---------------- Category grid ---------------- */
   .cat-grid{
     display:grid; grid-template-columns:repeat(6, 1fr); gap:14px;
@@ -534,11 +545,12 @@
     </div>
 
     <nav class="primary-nav">
-      <div class="nav-item active" data-scroll="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></div>
+      <div class="nav-item active" id="nav-home" data-scroll="top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Home</span></div>
       <div class="nav-item" data-scroll="featured"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>Discover</span></div>
       <div class="nav-item" data-open-search><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span>Search</span></div>
       <div class="nav-item" data-scroll="categories"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Library</span></div>
       <div class="nav-item" data-scroll="recent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h12"/></svg><span>Playlists</span></div>
+      <div class="nav-item" id="nav-watchlist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3.5h12a1 1 0 011 1V21l-7-4-7 4V4.5a1 1 0 011-1z"/></svg><span>Watchlist</span></div>
       <div class="nav-item" data-cat="podcast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3"/></svg><span>Podcasts</span></div>
       <div class="nav-item" data-cat="audiobook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h11a2 2 0 012 2v14H6a2 2 0 01-2-2V4z"/><path d="M17 4h3v16h-3"/></svg><span>Audiobooks</span></div>
       <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M4.5 12a7.5 7.5 0 0115 0M2 12a10 10 0 0120 0"/></svg><span>Live</span></div>
@@ -642,6 +654,23 @@
           </div>
         </div>
         <div class="track-grid" id="category-page-grid"></div>
+      </div>
+
+      <!-- ============ WATCHLIST PAGE ============ -->
+      <div id="watchlist-view" style="display:none;">
+        <div class="category-page-head">
+          <div class="cat-back-btn" id="watchlist-back-btn" title="Back">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </div>
+          <div class="category-page-icon c1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M6 3.5h12a1 1 0 011 1V21l-7-4-7 4V4.5a1 1 0 011-1z"/></svg>
+          </div>
+          <div class="category-page-title">
+            <h1>Watchlist</h1>
+            <p id="watchlist-page-count">0 tracks</p>
+          </div>
+        </div>
+        <div class="track-grid" id="watchlist-page-grid"></div>
       </div>
 
     </main>
@@ -982,17 +1011,24 @@ document.querySelectorAll('[data-close]').forEach(b=> b.addEventListener('click'
 document.querySelectorAll('.modal-backdrop').forEach(bd=> bd.addEventListener('click', e=>{ if(e.target===bd) bd.classList.remove('open'); }));
 
 // ---------- Nav scroll ----------
+function setActiveNav(el){
+  document.querySelectorAll('.nav-item').forEach(n=> n.classList.remove('active'));
+  if(el) el.classList.add('active');
+}
 document.querySelectorAll('[data-scroll]').forEach(el=>{
   el.addEventListener('click', ()=>{
     closeCategoryPage();
+    closeWatchlistPage();
+    setActiveNav(el);
     const id = el.dataset.scroll;
     const target = document.getElementById(id);
     if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
   });
 });
 document.querySelectorAll('[data-cat]').forEach(el=>{
-  el.addEventListener('click', ()=> openCategoryPage(el.dataset.cat));
+  el.addEventListener('click', ()=>{ closeWatchlistPage(); openCategoryPage(el.dataset.cat); });
 });
+document.getElementById('nav-watchlist').addEventListener('click', ()=> openWatchlistPage());
 document.querySelector('[data-open-search]')?.addEventListener('click', ()=> document.getElementById('search-input').focus());
 
 // ---------- Auth ----------
@@ -1425,6 +1461,7 @@ function renderCategoryPageGrid(){
 function openCategoryPage(key){
   const cat = CATEGORIES.find(c => c.key === key);
   if(!cat) return;
+  closeWatchlistPage();
   openCategoryKey = key;
   document.getElementById('category-page-name').textContent = cat.label;
   document.getElementById('category-page-icon').className = 'category-page-icon ' + cat.tile;
@@ -1438,30 +1475,80 @@ function openCategoryPage(key){
 }
 
 function closeCategoryPage(){
+  if(!openCategoryKey) return;
   openCategoryKey = null;
   document.getElementById('category-view').style.display = 'none';
   document.getElementById('home-view').style.display = 'block';
   if(location.hash) history.pushState('', document.title, location.pathname + location.search);
 }
 
-document.getElementById('category-back-btn').addEventListener('click', closeCategoryPage);
+document.getElementById('category-back-btn').addEventListener('click', ()=>{
+  closeCategoryPage();
+  setActiveNav(document.getElementById('nav-home'));
+});
+
+// ---------- Watchlist page ----------
+let watchlistOpen = false;
+
+function renderWatchlistPageGrid(){
+  const tracks = allTracks.filter(t => likedIds.has(t.id));
+  document.getElementById('watchlist-page-count').textContent =
+    tracks.length === 1 ? '1 track' : `${tracks.length} tracks`;
+  const grid = document.getElementById('watchlist-page-grid');
+  grid.innerHTML = tracks.length
+    ? tracks.map(trackCardHTML).join('')
+    : `<div class="empty-note">Your watchlist is empty — tap the bookmark icon on any track to save it here.</div>`;
+  grid.querySelectorAll('[data-track]').forEach(el=>{
+    el.addEventListener('click', ()=> playFromQueue(tracks, el.dataset.track));
+  });
+}
+
+function openWatchlistPage(){
+  closeCategoryPage();
+  watchlistOpen = true;
+  renderWatchlistPageGrid();
+  document.getElementById('home-view').style.display = 'none';
+  document.getElementById('watchlist-view').style.display = 'block';
+  document.getElementById('top').scrollIntoView({ behavior:'auto', block:'start' });
+  setActiveNav(document.getElementById('nav-watchlist'));
+  if(location.hash !== '#watchlist') location.hash = 'watchlist';
+}
+
+function closeWatchlistPage(){
+  if(!watchlistOpen) return;
+  watchlistOpen = false;
+  document.getElementById('watchlist-view').style.display = 'none';
+  document.getElementById('home-view').style.display = 'block';
+  if(location.hash) history.pushState('', document.title, location.pathname + location.search);
+}
+
+document.getElementById('watchlist-back-btn').addEventListener('click', ()=>{
+  closeWatchlistPage();
+  setActiveNav(document.getElementById('nav-home'));
+});
 
 // Keep the open page in sync with the URL: refreshing, using the
 // browser's back/forward buttons, or sharing a link with #cat-nasheed
-// in it all land on the same category page instead of always resetting
-// to Home.
+// or #watchlist in it all land on the same page instead of always
+// resetting to Home.
 window.addEventListener('hashchange', ()=>{
   const m = location.hash.match(/^#cat-(.+)$/);
   if(m && CATEGORIES.some(c => c.key === m[1])){
+    closeWatchlistPage();
     if(openCategoryKey !== m[1]) openCategoryPage(m[1]);
-  } else if(openCategoryKey){
+  } else if(location.hash === '#watchlist'){
+    if(!watchlistOpen) openWatchlistPage();
+  } else {
     closeCategoryPage();
+    closeWatchlistPage();
+    setActiveNav(document.getElementById('nav-home'));
   }
 });
 
 function restoreViewFromHash(){
   const m = location.hash.match(/^#cat-(.+)$/);
   if(m && CATEGORIES.some(c => c.key === m[1])) openCategoryPage(m[1]);
+  else if(location.hash === '#watchlist') openWatchlistPage();
 }
 
 function canManageTrack(t){
@@ -1476,11 +1563,15 @@ function trackCardHTML(t){
          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>
        </button>`
     : '';
+  const onWatchlist = likedIds.has(t.id);
   return `
     <div class="feat-card" data-track="${t.id}">
       <div class="feat-art">
         <img src="${t.thumb || PLACEHOLDER_ART}" alt="">
         <div class="feat-play"><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+        <button class="track-watchlist-btn${onWatchlist ? ' on' : ''}" data-watchlist="${t.id}" title="${onWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}">
+          <svg viewBox="0 0 24 24" fill="${onWatchlist ? '#fff' : 'none'}" stroke="#fff" stroke-width="1.8"><path d="M6 3.5h12a1 1 0 011 1V21l-7-4-7 4V4.5a1 1 0 011-1z"/></svg>
+        </button>
         ${delBtn}
       </div>
       <div class="f-title">${t.title}</div>
@@ -1498,6 +1589,29 @@ document.addEventListener('click', (e)=>{
   e.preventDefault();
   handleDeleteTrack(btn.dataset.delete);
 }, true);
+
+// Same pattern for the watchlist bookmark icon: toggle membership
+// without also starting playback of the card underneath it.
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-watchlist]');
+  if(!btn) return;
+  e.stopPropagation();
+  e.preventDefault();
+  toggleWatchlist(btn.dataset.watchlist);
+}, true);
+
+function toggleWatchlist(id){
+  if(likedIds.has(id)) likedIds.delete(id); else likedIds.add(id);
+  localStorage.setItem('anora_liked', JSON.stringify([...likedIds]));
+  updateLikeUI();
+  document.querySelectorAll(`[data-watchlist="${id}"]`).forEach(btn=>{
+    const on = likedIds.has(id);
+    btn.classList.toggle('on', on);
+    btn.title = on ? 'Remove from watchlist' : 'Add to watchlist';
+    btn.querySelector('svg').setAttribute('fill', on ? '#fff' : 'none');
+  });
+  if(watchlistOpen) renderWatchlistPageGrid();
+}
 
 async function handleDeleteTrack(id){
   const t = allTracks.find(tr => tr.id === id);
@@ -1712,6 +1826,7 @@ async function loadTracks(){
   renderRecent();
   renderCategoryPageGrid();
   renderSuggested();
+  if(watchlistOpen) renderWatchlistPageGrid();
 }
 
 // ---------- YouTube IFrame Player ----------
@@ -1785,9 +1900,7 @@ function updateLikeUI(){
   btn.addEventListener('click', ()=>{
     const t = currentQueue[currentIndex];
     if(!t) return;
-    if(likedIds.has(t.id)) likedIds.delete(t.id); else likedIds.add(t.id);
-    localStorage.setItem('anora_liked', JSON.stringify([...likedIds]));
-    updateLikeUI();
+    toggleWatchlist(t.id);
   });
 });
 
