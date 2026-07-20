@@ -2238,8 +2238,18 @@ nativePlayer.addEventListener('ended', ()=>{
 });
 
 function onPlayerStateChange(e){
-  if(e.data === YT.PlayerState.PLAYING){ setPlayIcons(true); startSeekPolling(); }
+  const subEl = document.getElementById('np-sub-big');
+  const t = currentQueue[currentIndex];
+  if(e.data === YT.PlayerState.PLAYING){
+    setPlayIcons(true); startSeekPolling();
+    if(subEl && t) subEl.textContent = t.channel || '';
+  }
   else if(e.data === YT.PlayerState.PAUSED){ setPlayIcons(false); stopSeekPolling(); }
+  else if(e.data === YT.PlayerState.BUFFERING){
+    // Ads frequently surface as a BUFFERING/UNSTARTED blip right after load.
+    // This is purely a UI label, not any interference with the ad itself.
+    if(subEl) subEl.textContent = 'Ad playing…';
+  }
   else if(e.data === YT.PlayerState.ENDED){ repeatOn ? loadCurrent() : playNext(); }
 }
 
